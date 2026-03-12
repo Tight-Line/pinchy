@@ -1,6 +1,4 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
 import { randomBytes } from "crypto";
-import { dirname } from "path";
 import { PROVIDERS, type ProviderName } from "@/lib/providers";
 import { db } from "@/db";
 import { agents } from "@/db/schema";
@@ -9,21 +7,12 @@ import { computeDeniedGroups } from "@/lib/tool-registry";
 import { getOpenClawWorkspacePath } from "@/lib/workspace";
 import { restartState } from "@/server/restart-state";
 import { migrateExistingSmithers } from "@/lib/migrate-onboarding";
-
-const CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || "/openclaw-config/openclaw.json";
+import { getBackend } from "@/lib/openclaw-backend";
 
 interface OpenClawConfigParams {
   provider: ProviderName;
   apiKey: string;
   model: string;
-}
-
-function readExistingConfig(): Record<string, unknown> {
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
-  } catch {
-    return {};
-  }
 }
 
 function deepMerge(
@@ -51,8 +40,9 @@ function deepMerge(
   return result;
 }
 
-export function writeOpenClawConfig({ provider, apiKey, model }: OpenClawConfigParams) {
-  const existing = readExistingConfig();
+export async function writeOpenClawConfig({ provider, apiKey, model }: OpenClawConfigParams) {
+  const backend = getBackend();
+  const existing = await backend.readConfig();
 
   // Generate auth token if none exists in the existing config
   const existingGateway = (existing.gateway as Record<string, unknown>) || {};
@@ -77,12 +67,8 @@ export function writeOpenClawConfig({ provider, apiKey, model }: OpenClawConfigP
 
   const merged = deepMerge(existing, pinchyFields);
 
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), { encoding: "utf-8", mode: 0o644 });
+  await backend.writeConfig(merged);
+  await backend.notifyConfigChanged();
   restartState.notifyRestart();
 }
 
@@ -91,7 +77,8 @@ export async function regenerateOpenClawConfig() {
   // are reflected in the config we're about to generate.
   await migrateExistingSmithers();
 
-  const existing = readExistingConfig();
+  const backend = getBackend();
+  const existing = await backend.readConfig();
 
   // Preserve only the gateway block from existing config (contains auth token,
   // mode, bind, and any OpenClaw-generated fields). Everything else is rebuilt
@@ -222,11 +209,7 @@ export async function regenerateOpenClawConfig() {
     config.plugins = { allow: allowedPlugins, entries };
   }
 
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: "utf-8", mode: 0o644 });
+  await backend.writeConfig(config);
+  await backend.notifyConfigChanged();
   restartState.notifyRestart();
 }

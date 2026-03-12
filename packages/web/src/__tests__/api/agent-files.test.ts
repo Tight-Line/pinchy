@@ -18,8 +18,8 @@ vi.mock("@/lib/auth", () => {
 });
 
 vi.mock("@/lib/workspace", () => ({
-  readWorkspaceFile: vi.fn().mockReturnValue("# Soul content"),
-  writeWorkspaceFile: vi.fn(),
+  readWorkspaceFile: vi.fn().mockResolvedValue("# Soul content"),
+  writeWorkspaceFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 const { mockAssertAgentWriteAccess } = vi.hoisted(() => ({
@@ -70,7 +70,7 @@ describe("GET /api/agents/[agentId]/files/[filename]", () => {
       user: { id: "1", email: "admin@test.com" },
     } as any);
     vi.mocked(getAgentWithAccess).mockResolvedValue(defaultAgent);
-    vi.mocked(readWorkspaceFile).mockReturnValue("# Soul content");
+    vi.mocked(readWorkspaceFile).mockResolvedValue("# Soul content");
   });
 
   it("should return file content for an allowed file", async () => {
@@ -121,9 +121,7 @@ describe("GET /api/agents/[agentId]/files/[filename]", () => {
   });
 
   it("should return 400 when filename is not allowed", async () => {
-    vi.mocked(readWorkspaceFile).mockImplementationOnce(() => {
-      throw new Error("File not allowed: SECRET.md");
-    });
+    vi.mocked(readWorkspaceFile).mockRejectedValueOnce(new Error("File not allowed: SECRET.md"));
 
     const request = makeGetRequest("agent-1", "SECRET.md");
     const response = await GET(request, makeParams("agent-1", "SECRET.md"));
@@ -134,9 +132,7 @@ describe("GET /api/agents/[agentId]/files/[filename]", () => {
   });
 
   it("should return 400 for USER.md (no longer in ALLOWED_FILES)", async () => {
-    vi.mocked(readWorkspaceFile).mockImplementationOnce(() => {
-      throw new Error("File not allowed: USER.md");
-    });
+    vi.mocked(readWorkspaceFile).mockRejectedValueOnce(new Error("File not allowed: USER.md"));
 
     const request = makeGetRequest("agent-1", "USER.md");
     const response = await GET(request, makeParams("agent-1", "USER.md"));
@@ -147,7 +143,7 @@ describe("GET /api/agents/[agentId]/files/[filename]", () => {
   });
 
   it("should read AGENTS.md file", async () => {
-    vi.mocked(readWorkspaceFile).mockReturnValueOnce("# Agent instructions");
+    vi.mocked(readWorkspaceFile).mockResolvedValueOnce("# Agent instructions");
 
     const request = makeGetRequest("agent-1", "AGENTS.md");
     const response = await GET(request, makeParams("agent-1", "AGENTS.md"));
@@ -159,9 +155,7 @@ describe("GET /api/agents/[agentId]/files/[filename]", () => {
   });
 
   it("should return 400 for IDENTITY.md (not in ALLOWED_FILES)", async () => {
-    vi.mocked(readWorkspaceFile).mockImplementationOnce(() => {
-      throw new Error("File not allowed: IDENTITY.md");
-    });
+    vi.mocked(readWorkspaceFile).mockRejectedValueOnce(new Error("File not allowed: IDENTITY.md"));
 
     const request = makeGetRequest("agent-1", "IDENTITY.md");
     const response = await GET(request, makeParams("agent-1", "IDENTITY.md"));
@@ -172,7 +166,7 @@ describe("GET /api/agents/[agentId]/files/[filename]", () => {
   });
 
   it("should return empty string when file does not exist yet", async () => {
-    vi.mocked(readWorkspaceFile).mockReturnValueOnce("");
+    vi.mocked(readWorkspaceFile).mockResolvedValueOnce("");
 
     const request = makeGetRequest("agent-1", "SOUL.md");
     const response = await GET(request, makeParams("agent-1", "SOUL.md"));
@@ -246,9 +240,7 @@ describe("PUT /api/agents/[agentId]/files/[filename]", () => {
   });
 
   it("should return 400 when filename is not allowed", async () => {
-    vi.mocked(writeWorkspaceFile).mockImplementationOnce(() => {
-      throw new Error("File not allowed: HACK.md");
-    });
+    vi.mocked(writeWorkspaceFile).mockRejectedValueOnce(new Error("File not allowed: HACK.md"));
 
     const request = makePutRequest("agent-1", "HACK.md", {
       content: "malicious content",
@@ -261,9 +253,7 @@ describe("PUT /api/agents/[agentId]/files/[filename]", () => {
   });
 
   it("should return 400 for USER.md PUT (no longer in ALLOWED_FILES)", async () => {
-    vi.mocked(writeWorkspaceFile).mockImplementationOnce(() => {
-      throw new Error("File not allowed: USER.md");
-    });
+    vi.mocked(writeWorkspaceFile).mockRejectedValueOnce(new Error("File not allowed: USER.md"));
 
     const request = makePutRequest("agent-1", "USER.md", {
       content: "# Team info",

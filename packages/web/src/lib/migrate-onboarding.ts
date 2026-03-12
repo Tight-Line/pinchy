@@ -25,6 +25,6 @@ export async function migrateExistingSmithers(): Promise<void> {
 
     await db.update(agents).set({ allowedTools }).where(eq(agents.id, agent.id));
 
-    writeWorkspaceFileInternal(agent.id, "USER.md", getOnboardingPrompt(isAdmin));
+    await writeWorkspaceFileInternal(agent.id, "USER.md", getOnboardingPrompt(isAdmin));
   }
 }

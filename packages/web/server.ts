@@ -8,6 +8,7 @@ import { ClientRouter } from "./src/server/client-router";
 import { SessionCache } from "./src/server/session-cache";
 import { validateWsSession } from "./src/server/ws-auth";
 import { restartState } from "./src/server/restart-state";
+import { setBackendClient } from "./src/lib/openclaw-backend";
 import { logCapture } from "./src/lib/log-capture";
 
 logCapture.install();
@@ -178,6 +179,7 @@ app.prepare().then(async () => {
       console.log("Connected to OpenClaw Gateway");
       hasConnected = true;
       errorLogged = false;
+      setBackendClient(openclawClient!);
       if (restartState.isRestarting) {
         restartState.notifyReady();
       }

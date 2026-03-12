@@ -116,21 +116,21 @@ export async function POST(request: NextRequest) {
   }).catch(() => {});
 
   // Create workspace with personality preset's SOUL.md
-  ensureWorkspace(agent.id);
-  writeWorkspaceFile(agent.id, "SOUL.md", preset?.soulMd ?? "");
-  writeIdentityFile(agent.id, { name: agent.name, tagline: agent.tagline });
+  await ensureWorkspace(agent.id);
+  await writeWorkspaceFile(agent.id, "SOUL.md", preset?.soulMd ?? "");
+  await writeIdentityFile(agent.id, { name: agent.name, tagline: agent.tagline });
   const agentsMd = generateAgentsMd(
     template,
     template.pluginId && pluginConfig ? pluginConfig : undefined
   );
   if (agentsMd) {
-    writeWorkspaceFile(agent.id, "AGENTS.md", agentsMd);
+    await writeWorkspaceFile(agent.id, "AGENTS.md", agentsMd);
   }
   const context = await getContextForAgent({
     isPersonal: false,
     ownerId: session.user.id!,
   });
-  writeWorkspaceFileInternal(agent.id, "USER.md", context);
+  await writeWorkspaceFileInternal(agent.id, "USER.md", context);
 
   await regenerateOpenClawConfig();
 

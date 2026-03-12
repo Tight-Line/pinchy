@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   if (agentOrError instanceof NextResponse) return agentOrError;
 
   try {
-    const content = readWorkspaceFile(agentId, filename);
+    const content = await readWorkspaceFile(agentId, filename);
     return NextResponse.json({ content });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Invalid file";
@@ -51,7 +51,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   try {
-    writeWorkspaceFile(agentId, filename, content);
+    await writeWorkspaceFile(agentId, filename, content);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Invalid file";

@@ -44,9 +44,9 @@ export async function createSmithersAgent({
     })
     .returning();
 
-  ensureWorkspace(agent.id);
-  writeWorkspaceFile(agent.id, "SOUL.md", SMITHERS_SOUL_MD);
-  writeIdentityFile(agent.id, { name: agent.name, tagline: agent.tagline });
+  await ensureWorkspace(agent.id);
+  await writeWorkspaceFile(agent.id, "SOUL.md", SMITHERS_SOUL_MD);
+  await writeIdentityFile(agent.id, { name: agent.name, tagline: agent.tagline });
 
   const context = await getContextForAgent({
     isPersonal: agent.isPersonal,
@@ -56,7 +56,7 @@ export async function createSmithersAgent({
   // Write onboarding prompt to USER.md if user has no context yet.
   // OpenClaw reads USER.md as part of the agent's system prompt, so putting
   // onboarding instructions there ensures Smithers sees them.
-  writeWorkspaceFileInternal(agent.id, "USER.md", context || getOnboardingPrompt(isAdmin));
+  await writeWorkspaceFileInternal(agent.id, "USER.md", context || getOnboardingPrompt(isAdmin));
 
   return agent;
 }

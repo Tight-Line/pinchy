@@ -26,7 +26,7 @@ export async function deleteAgent(id: string) {
     .returning();
 
   if (updated) {
-    deleteWorkspace(id);
+    await deleteWorkspace(id);
     await regenerateOpenClawConfig();
   }
 

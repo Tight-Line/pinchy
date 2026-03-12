@@ -143,7 +143,7 @@ export async function PATCH(
   }
 
   if (data.name !== undefined || data.tagline !== undefined) {
-    writeIdentityFile(agentId, {
+    await writeIdentityFile(agentId, {
       name: agent.name,
       tagline: agent.tagline,
     });
