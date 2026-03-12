@@ -3,8 +3,7 @@ name: Publish Docker images
 on:
   push:
     tags: ["v*"]
-  pull_request:
-    branches: [main]
+    branches: ["**", "!main"]
 
 permissions:
   contents: read
@@ -43,9 +42,8 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha
-            type=raw,value=pr-${{ github.event.number }},enable=${{ github.event_name == 'pull_request' }}
-            type=raw,value=pr-${{ github.event.number }}-{{sha}},enable=${{ github.event_name == 'pull_request' }}
+            type=ref,event=branch
+            type=raw,value=${{ github.ref_name }}-{{sha}},enable=${{ github.ref_type == 'branch' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5

@@ -25,6 +25,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           image-names: ${{ matrix.image }}
           tag-selection: "tagged"
-          tag-regex: "^pr-"
+          tag-regex: "^feat[-/]|^fix[-/]|^chore[-/]|^docs[-/]"
           cut-off: 15 days ago UTC
           timestamp-to-use: "created_at"
