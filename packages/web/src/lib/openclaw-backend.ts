@@ -155,35 +155,68 @@ export class ApiBackend implements OpenClawBackend {
       await this.readConfig();
     }
 
-    const res = await client.request("config.set", {
-      raw: JSON.stringify(config, null, 2),
-      baseHash: this.configHash,
-    });
-
-    if (!res.ok) {
-      // If hash mismatch, re-read and retry once
-      if (res.error?.message?.includes("config changed")) {
-        await this.readConfig();
-        const retry = await client.request("config.set", {
-          raw: JSON.stringify(config, null, 2),
-          baseHash: this.configHash,
-        });
-        if (!retry.ok) {
-          throw new Error(`config.set retry failed: ${retry.error?.message}`);
-        }
-        this.configHash = null;
-        return;
-      }
-      throw new Error(`config.set failed: ${res.error?.message}`);
-    }
+    // config.set is fire-and-forget: OpenClaw writes the config file,
+    // its file watcher detects the change, and it restarts. The restart
+    // kills the WebSocket before the response arrives. We send the
+    // request, then wait for the client to reconnect (which means
+    // OpenClaw is back up with the new config applied).
+    client
+      .request("config.set", {
+        raw: JSON.stringify(config, null, 2),
+        baseHash: this.configHash,
+      })
+      .catch(() => {
+        // Expected: request times out because the restart killed the connection.
+      });
 
     this.configHash = null;
+    await this.waitForReconnect(client);
+  }
+
+  /**
+   * Wait for the client to disconnect and reconnect. Used after config.set
+   * to ensure OpenClaw has restarted with the new config before proceeding.
+   */
+  private waitForReconnect(client: OpenClawClient, timeoutMs = 30_000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // If already disconnected, wait for connected event directly.
+      // If still connected, wait for disconnect first, then connected.
+      const timer = setTimeout(() => {
+        client.off("connected", onConnected);
+        client.off("disconnected", onDisconnected);
+        // If we're still connected, config.set may not have triggered
+        // a restart (e.g. no actual config change). That's OK.
+        if (client.isConnected) {
+          resolve();
+        } else {
+          reject(new Error("Timed out waiting for OpenClaw to restart after config.set"));
+        }
+      }, timeoutMs);
+
+      const onConnected = () => {
+        clearTimeout(timer);
+        client.off("connected", onConnected);
+        client.off("disconnected", onDisconnected);
+        resolve();
+      };
+
+      const onDisconnected = () => {
+        // Now wait for reconnect
+        client.off("disconnected", onDisconnected);
+        client.on("connected", onConnected);
+      };
+
+      if (client.isConnected) {
+        client.on("disconnected", onDisconnected);
+      } else {
+        client.on("connected", onConnected);
+      }
+    });
   }
 
   async notifyConfigChanged(): Promise<void> {
-    // API backend: OpenClaw picks up config changes immediately when
-    // written via config.set/config.apply. For config.set, OpenClaw's
-    // config watcher handles the restart. No extra notification needed.
+    // API backend: writeConfig already waits for the restart cycle.
+    // Nothing additional needed.
   }
 
   async ensureAgentWorkspace(agentId: string): Promise<void> {
