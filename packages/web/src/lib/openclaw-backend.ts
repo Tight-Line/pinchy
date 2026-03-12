@@ -177,7 +177,10 @@ export class ApiBackend implements OpenClawBackend {
    * Wait for the client to disconnect and reconnect. Used after config.set
    * to ensure OpenClaw has restarted with the new config before proceeding.
    */
-  private waitForReconnect(client: OpenClawClient, timeoutMs = 30_000): Promise<void> {
+  private waitForReconnect(
+    client: OpenClawClient,
+    timeoutMs = Number(process.env.OPENCLAW_RECONNECT_TIMEOUT_MS) || 90_000
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       // If already disconnected, wait for connected event directly.
       // If still connected, wait for disconnect first, then connected.
