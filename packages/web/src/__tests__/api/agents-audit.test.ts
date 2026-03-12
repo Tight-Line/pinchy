@@ -545,7 +545,7 @@ describe("PATCH /api/agents/[agentId] config regeneration", () => {
     PATCH = mod.PATCH;
   });
 
-  it("should not call regenerateOpenClawConfig directly when allowedTools change (updateAgent handles it)", async () => {
+  it("should call regenerateOpenClawConfig when updating a shared agent", async () => {
     vi.mocked(auth.api.getSession).mockResolvedValueOnce({
       user: { id: "user-1", role: "admin" },
       expires: "",
@@ -567,6 +567,39 @@ describe("PATCH /api/agents/[agentId] config regeneration", () => {
     const request = new NextRequest("http://localhost:7777/api/agents/agent-1", {
       method: "PATCH",
       body: JSON.stringify({ allowedTools: ["shell"] }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ agentId: "agent-1" }),
+    });
+    expect(response.status).toBe(200);
+
+    expect(regenerateOpenClawConfig).toHaveBeenCalled();
+  });
+
+  it("should not call regenerateOpenClawConfig when updating a personal agent", async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValueOnce({
+      user: { id: "user-1", role: "admin" },
+      expires: "",
+    } as any);
+
+    mockAgent({
+      id: "agent-1",
+      name: "Smithers",
+      isPersonal: true,
+      ownerId: "user-1",
+    });
+
+    vi.mocked(updateAgent).mockResolvedValueOnce({
+      id: "agent-1",
+      name: "Smithers",
+      model: "anthropic/claude-haiku-4-5-20251001",
+    } as never);
+
+    const request = new NextRequest("http://localhost:7777/api/agents/agent-1", {
+      method: "PATCH",
+      body: JSON.stringify({ model: "anthropic/claude-haiku-4-5-20251001" }),
       headers: { "Content-Type": "application/json" },
     });
 

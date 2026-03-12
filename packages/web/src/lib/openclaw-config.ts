@@ -70,9 +70,9 @@ export async function writeOpenClawConfig({ provider, apiKey, model }: OpenClawC
 
   const merged = deepMerge(existing, pinchyFields);
 
+  restartState.notifyRestart();
   await backend.writeConfig(merged);
   await backend.notifyConfigChanged();
-  restartState.notifyRestart();
 }
 
 export async function regenerateOpenClawConfig() {
@@ -214,12 +214,15 @@ export async function regenerateOpenClawConfig() {
     config.plugins = { allow: allowedPlugins, entries };
   }
 
+  // Notify before writeConfig so the restart state is set when the
+  // reconnect handler fires (in API mode, writeConfig blocks until
+  // reconnection).
+  restartState.notifyRestart();
+
   await backend.writeConfig(config);
   await backend.notifyConfigChanged();
 
   // Now that the config is pushed (and OpenClaw knows about all agents),
   // write any workspace files that the migration deferred.
   await migrateExistingSmithers({ skipDbUpdates: true });
-
-  restartState.notifyRestart();
 }

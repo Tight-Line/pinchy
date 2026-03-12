@@ -22,6 +22,10 @@ vi.mock("@/lib/workspace", () => ({
   writeWorkspaceFile: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/openclaw-config", () => ({
+  regenerateOpenClawConfig: vi.fn().mockResolvedValue(undefined),
+}));
+
 const { mockAssertAgentWriteAccess } = vi.hoisted(() => ({
   mockAssertAgentWriteAccess: vi.fn(),
 }));

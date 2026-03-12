@@ -11,6 +11,7 @@ import { writeIdentityFile } from "@/lib/workspace";
 import { db } from "@/db";
 import { agentGroups } from "@/db/schema";
 import { getAgentGroupIds } from "@/lib/groups";
+import { regenerateOpenClawConfig } from "@/lib/openclaw-config";
 
 export async function GET(
   request: NextRequest,
@@ -149,6 +150,13 @@ export async function PATCH(
     });
   }
 
+  // For shared agents, push config and restart OpenClaw so changes take
+  // effect and all users' sessions are invalidated. Personal agent edits
+  // skip the restart; the owner just needs to start a new conversation.
+  if (!existingAgent.isPersonal) {
+    await regenerateOpenClawConfig();
+  }
+
   appendAuditLog({
     actorType: "user",
     actorId: session.user.id!,
@@ -183,6 +191,7 @@ export async function DELETE(
   }
 
   await deleteAgent(agentId);
+  await regenerateOpenClawConfig();
 
   appendAuditLog({
     actorType: "user",

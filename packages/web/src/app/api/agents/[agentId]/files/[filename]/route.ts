@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { readWorkspaceFile, writeWorkspaceFile } from "@/lib/workspace";
 import { getAgentWithAccess, assertAgentWriteAccess } from "@/lib/agent-access";
+import { regenerateOpenClawConfig } from "@/lib/openclaw-config";
 
 type Params = { params: Promise<{ agentId: string; filename: string }> };
 
@@ -52,6 +53,13 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
   try {
     await writeWorkspaceFile(agentId, filename, content);
+
+    // For shared agents, restart OpenClaw so all users' sessions pick up
+    // the new file content. Personal agent edits skip the restart.
+    if (!agentOrError.isPersonal) {
+      await regenerateOpenClawConfig();
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Invalid file";
