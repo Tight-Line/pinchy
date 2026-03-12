@@ -80,7 +80,7 @@ spec:
             - name: openclaw-data
               mountPath: /data
             - name: plugins
-              mountPath: /openclaw-extensions
+              mountPath: /root/.openclaw/extensions
               readOnly: true
           livenessProbe:
             tcpSocket:
