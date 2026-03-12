@@ -77,7 +77,7 @@ function parsePayload(value: unknown): ToolAuditPayload | null {
 }
 
 export async function POST(request: NextRequest) {
-  if (!validateGatewayToken(request.headers)) {
+  if (!(await validateGatewayToken(request.headers))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

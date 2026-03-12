@@ -10,7 +10,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
-  if (!validateGatewayToken(request.headers)) {
+  if (!(await validateGatewayToken(request.headers))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

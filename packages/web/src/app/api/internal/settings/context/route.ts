@@ -4,7 +4,7 @@ import { setSetting } from "@/lib/settings";
 import { syncOrgContextToWorkspaces } from "@/lib/context-sync";
 
 export async function PUT(request: NextRequest) {
-  if (!validateGatewayToken(request.headers)) {
+  if (!(await validateGatewayToken(request.headers))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

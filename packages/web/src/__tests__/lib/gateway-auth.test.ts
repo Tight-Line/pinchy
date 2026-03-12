@@ -6,6 +6,10 @@ import { tmpdir } from "os";
 const TEST_CONFIG_DIR = join(tmpdir(), "pinchy-gateway-auth-test");
 const TEST_CONFIG_PATH = join(TEST_CONFIG_DIR, "openclaw.json");
 
+vi.mock("@/lib/settings", () => ({
+  getSetting: vi.fn().mockResolvedValue(null),
+}));
+
 describe("validateGatewayToken", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -24,7 +28,7 @@ describe("validateGatewayToken", () => {
     }
   });
 
-  it("returns true when Authorization header matches gateway token", async () => {
+  it("returns true when Authorization header matches gateway token from file", async () => {
     writeFileSync(
       TEST_CONFIG_PATH,
       JSON.stringify({ gateway: { auth: { token: "secret-token-123" } } })
@@ -33,7 +37,32 @@ describe("validateGatewayToken", () => {
     const { validateGatewayToken } = await import("@/lib/gateway-auth");
 
     const headers = new Headers({ Authorization: "Bearer secret-token-123" });
-    expect(validateGatewayToken(headers)).toBe(true);
+    expect(await validateGatewayToken(headers)).toBe(true);
+  });
+
+  it("returns true when Authorization header matches gateway token from DB", async () => {
+    const { getSetting } = await import("@/lib/settings");
+    vi.mocked(getSetting).mockResolvedValue("db-token-456");
+
+    const { validateGatewayToken } = await import("@/lib/gateway-auth");
+
+    const headers = new Headers({ Authorization: "Bearer db-token-456" });
+    expect(await validateGatewayToken(headers)).toBe(true);
+  });
+
+  it("prefers DB token over file token", async () => {
+    writeFileSync(TEST_CONFIG_PATH, JSON.stringify({ gateway: { auth: { token: "file-token" } } }));
+
+    const { getSetting } = await import("@/lib/settings");
+    vi.mocked(getSetting).mockResolvedValue("db-token");
+
+    const { validateGatewayToken } = await import("@/lib/gateway-auth");
+
+    const headers = new Headers({ Authorization: "Bearer db-token" });
+    expect(await validateGatewayToken(headers)).toBe(true);
+
+    const headersFile = new Headers({ Authorization: "Bearer file-token" });
+    expect(await validateGatewayToken(headersFile)).toBe(false);
   });
 
   it("returns false when token does not match", async () => {
@@ -45,7 +74,7 @@ describe("validateGatewayToken", () => {
     const { validateGatewayToken } = await import("@/lib/gateway-auth");
 
     const headers = new Headers({ Authorization: "Bearer wrong-token" });
-    expect(validateGatewayToken(headers)).toBe(false);
+    expect(await validateGatewayToken(headers)).toBe(false);
   });
 
   it("returns false when Authorization header is missing", async () => {
@@ -57,11 +86,10 @@ describe("validateGatewayToken", () => {
     const { validateGatewayToken } = await import("@/lib/gateway-auth");
 
     const headers = new Headers();
-    expect(validateGatewayToken(headers)).toBe(false);
+    expect(await validateGatewayToken(headers)).toBe(false);
   });
 
-  it("returns false when config file does not exist", async () => {
-    // Don't write the config file
+  it("returns false when config file does not exist and no DB token", async () => {
     try {
       unlinkSync(TEST_CONFIG_PATH);
     } catch {
@@ -71,6 +99,6 @@ describe("validateGatewayToken", () => {
     const { validateGatewayToken } = await import("@/lib/gateway-auth");
 
     const headers = new Headers({ Authorization: "Bearer some-token" });
-    expect(validateGatewayToken(headers)).toBe(false);
+    expect(await validateGatewayToken(headers)).toBe(false);
   });
 });
