@@ -7,6 +7,7 @@ import {
   writeIdentityFile,
 } from "@/lib/workspace";
 import { getContextForAgent } from "@/lib/context-sync";
+import { regenerateOpenClawConfig } from "@/lib/openclaw-config";
 import { getSetting } from "@/lib/settings";
 import { PROVIDERS, type ProviderName } from "@/lib/providers";
 import { SMITHERS_SOUL_MD } from "@/lib/smithers-soul";
@@ -17,6 +18,7 @@ interface CreateSmithersOptions {
   ownerId: string | null;
   isPersonal: boolean;
   isAdmin?: boolean;
+  onAgentCreated?: () => Promise<void>;
 }
 
 export async function createSmithersAgent({
@@ -24,6 +26,7 @@ export async function createSmithersAgent({
   ownerId,
   isPersonal,
   isAdmin = false,
+  onAgentCreated,
 }: CreateSmithersOptions) {
   const allowedTools = isAdmin
     ? ["pinchy_save_user_context", "pinchy_save_org_context"]
@@ -43,6 +46,8 @@ export async function createSmithersAgent({
       allowedTools,
     })
     .returning();
+
+  if (onAgentCreated) await onAgentCreated();
 
   await ensureWorkspace(agent.id);
   await writeWorkspaceFile(agent.id, "SOUL.md", SMITHERS_SOUL_MD);
@@ -72,5 +77,11 @@ export async function seedPersonalAgent(userId: string, isAdmin = false) {
     ? PROVIDERS[defaultProvider].defaultModel
     : "anthropic/claude-sonnet-4-20250514";
 
-  return createSmithersAgent({ model, ownerId: userId, isPersonal: true, isAdmin });
+  return createSmithersAgent({
+    model,
+    ownerId: userId,
+    isPersonal: true,
+    isAdmin,
+    onAgentCreated: regenerateOpenClawConfig,
+  });
 }

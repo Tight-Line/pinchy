@@ -115,6 +115,10 @@ export async function POST(request: NextRequest) {
     detail: { name: agent.name, model: agent.model, templateId },
   }).catch(() => {});
 
+  // Push config to OpenClaw so it knows about the new agent before we
+  // write workspace files (required when using the API backend).
+  await regenerateOpenClawConfig();
+
   // Create workspace with personality preset's SOUL.md
   await ensureWorkspace(agent.id);
   await writeWorkspaceFile(agent.id, "SOUL.md", preset?.soulMd ?? "");
@@ -131,8 +135,6 @@ export async function POST(request: NextRequest) {
     ownerId: session.user.id!,
   });
   await writeWorkspaceFileInternal(agent.id, "USER.md", context);
-
-  await regenerateOpenClawConfig();
 
   revalidatePath("/", "layout");
 

@@ -175,11 +175,22 @@ app.prepare().then(async () => {
       // Swallow rejection — the error event handler logs once
     });
 
-    openclawClient.on("connected", () => {
+    openclawClient.on("connected", async () => {
       console.log("Connected to OpenClaw Gateway");
       hasConnected = true;
       errorLogged = false;
       setBackendClient(openclawClient!);
+
+      // Persist the gateway token so regenerateOpenClawConfig can include
+      // it in plugin configs without reading it from the (redacted) config.
+      if (gatewayToken) {
+        try {
+          const { setSetting } = await import("./src/lib/settings");
+          await setSetting("gateway_token", gatewayToken, true);
+        } catch {
+          // Best effort; DB may not be ready on first connect
+        }
+      }
       if (restartState.isRestarting) {
         restartState.notifyReady();
       }

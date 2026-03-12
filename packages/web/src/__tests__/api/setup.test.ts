@@ -66,6 +66,10 @@ vi.mock("@/lib/workspace", () => ({
   writeIdentityFile: vi.fn(),
 }));
 
+vi.mock("@/lib/openclaw-config", () => ({
+  regenerateOpenClawConfig: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/context-sync", () => ({
   getContextForAgent: vi.fn().mockResolvedValue(""),
 }));

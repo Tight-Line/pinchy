@@ -24,6 +24,7 @@ vi.mock("@/db", () => ({
 
 vi.mock("@/lib/settings", () => ({
   getSetting: vi.fn().mockResolvedValue(null),
+  setSetting: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/server/restart-state", () => ({
@@ -441,6 +442,9 @@ describe("regenerateOpenClawConfig", () => {
     mockBackend.readConfig.mockResolvedValue({
       gateway: { mode: "local", bind: "lan", auth: { token: "gw-token-123" } },
     });
+    mockedGetSetting.mockImplementation(async (key: string) =>
+      key === "gateway_token" ? "gw-token-123" : null
+    );
 
     mockedDb.select.mockReturnValue({
       from: vi.fn().mockResolvedValue([
@@ -475,6 +479,9 @@ describe("regenerateOpenClawConfig", () => {
     mockBackend.readConfig.mockResolvedValue({
       gateway: { mode: "local", bind: "lan", auth: { token: "gw-token-123" } },
     });
+    mockedGetSetting.mockImplementation(async (key: string) =>
+      key === "gateway_token" ? "gw-token-123" : null
+    );
 
     await regenerateOpenClawConfig();
 
