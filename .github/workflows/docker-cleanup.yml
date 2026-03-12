@@ -1,0 +1,30 @@
+name: Clean up PR images
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # daily at 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    name: Delete stale PR images
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        image: [pinchy, pinchy-openclaw]
+
+    steps:
+      - name: Delete PR images older than 15 days
+        uses: snok/container-retention-policy@v3
+        with:
+          account: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          image-names: ${{ matrix.image }}
+          tag-selection: "tagged"
+          tag-regex: "^pr-"
+          cut-off: 15 days ago UTC
+          timestamp-to-use: "created_at"

@@ -1,0 +1,19 @@
+Pinchy has been deployed!
+
+{{- if .Values.ingress.enabled }}
+
+Access Pinchy at: https://{{ .Values.ingress.host }}
+{{- else }}
+
+To access Pinchy, forward the service port:
+
+  kubectl port-forward svc/{{ .Release.Name }}-pinchy 7777:{{ .Values.pinchy.service.port }}
+
+Then open http://localhost:7777
+{{- end }}
+
+On first launch, complete the setup wizard to configure your AI provider.
+
+To check pod status:
+
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
