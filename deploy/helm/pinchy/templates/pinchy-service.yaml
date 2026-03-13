@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-pinchy
+  labels:
+    app.kubernetes.io/name: pinchy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.pinchy.service.port }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: pinchy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web

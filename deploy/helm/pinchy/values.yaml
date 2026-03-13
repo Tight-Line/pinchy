@@ -1,0 +1,68 @@
+pinchy:
+  image:
+    repository: ghcr.io/heypinchy/pinchy
+    tag: ""          # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  replicas: 1
+  service:
+    port: 7777
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+openclaw:
+  image:
+    repository: ghcr.io/heypinchy/pinchy-openclaw
+    tag: ""          # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  service:
+    port: 18789
+  storage:
+    size: 1Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+postgresql:
+  install: false
+  host: ""           # required when install=false
+  port: 5432
+  name: pinchy
+  sslmode: disable
+  image: postgres:17
+  auth:
+    username: pinchy
+    password: ""
+    existingSecret: ""
+    secretKey: postgresql-password
+  storage:
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+auth:
+  betterAuthSecret: ""   # auto-generated if empty
+  encryptionKey: ""      # auto-generated if empty
+  gatewayToken: ""       # auto-generated if empty
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""               # required when enabled
+  annotations: {}
+  tls: []

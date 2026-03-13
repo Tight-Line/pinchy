@@ -1,0 +1,110 @@
+{{- $secretName := include "pinchy.secretName" . -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-openclaw
+  labels:
+    app.kubernetes.io/name: pinchy-openclaw
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: gateway
+spec:
+  serviceName: {{ .Release.Name }}-openclaw
+  replicas: 1
+  updateStrategy:
+    type: OnDelete
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pinchy-openclaw
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pinchy-openclaw
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: gateway
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+        - name: init-config
+          image: {{ .Values.openclaw.image.repository }}:{{ .Values.openclaw.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.openclaw.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              # Seed openclaw.json with the gateway token from the Secret.
+              # ensure-gateway-token.js will skip generation since token already exists.
+              TOKEN=$(cat /secret/gateway-token)
+              mkdir -p /root/.openclaw
+              cat > /root/.openclaw/openclaw.json <<EOJSON
+              {
+                "gateway": {
+                  "mode": "local",
+                  "bind": "lan",
+                  "auth": {
+                    "mode": "token",
+                    "token": "${TOKEN}"
+                  }
+                }
+              }
+              EOJSON
+          volumeMounts:
+            - name: secret
+              mountPath: /secret
+              readOnly: true
+            - name: openclaw-data
+              mountPath: /root
+        - name: copy-plugins
+          image: {{ .Values.pinchy.image.repository }}:{{ .Values.pinchy.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.pinchy.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - cp -r /openclaw-extensions/* /target/
+          volumeMounts:
+            - name: plugins
+              mountPath: /target
+      containers:
+        - name: openclaw
+          image: {{ .Values.openclaw.image.repository }}:{{ .Values.openclaw.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.openclaw.image.pullPolicy }}
+          ports:
+            - name: gateway
+              containerPort: 18789
+          volumeMounts:
+            - name: openclaw-data
+              mountPath: /root
+            - name: plugins
+              mountPath: /root/.openclaw/extensions
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: gateway
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            tcpSocket:
+              port: gateway
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.openclaw.resources | nindent 12 }}
+      volumes:
+        - name: secret
+          secret:
+            secretName: {{ $secretName }}
+            items:
+              - key: gateway-token
+                path: gateway-token
+        - name: plugins
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: openclaw-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.openclaw.storage.storageClass }}
+        storageClassName: {{ .Values.openclaw.storage.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.openclaw.storage.size }}
