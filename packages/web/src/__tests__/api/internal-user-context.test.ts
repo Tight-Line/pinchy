@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/gateway-auth", () => ({
-  validateGatewayToken: vi.fn().mockReturnValue(true),
+  validateGatewayToken: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/db", () => ({
@@ -51,7 +51,7 @@ function makeParams(userId: string) {
 describe("PUT /api/internal/users/:userId/context", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(validateGatewayToken).mockReturnValue(true);
+    vi.mocked(validateGatewayToken).mockResolvedValue(true);
     vi.mocked(db.query.users.findFirst).mockResolvedValue({
       id: "user-1",
       role: "member",
@@ -60,7 +60,7 @@ describe("PUT /api/internal/users/:userId/context", () => {
   });
 
   it("returns 401 when gateway token is invalid", async () => {
-    vi.mocked(validateGatewayToken).mockReturnValue(false);
+    vi.mocked(validateGatewayToken).mockResolvedValue(false);
 
     const res = await PUT(makePutRequest("user-1", { content: "test" }), makeParams("user-1"));
     expect(res.status).toBe(401);

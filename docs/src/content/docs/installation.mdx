@@ -91,6 +91,18 @@ services:
       - PORT=3000
 ```
 
+## API backend mode
+
+By default, Pinchy and OpenClaw share filesystem volumes for configuration and workspace files. For deployments where they run in separate containers or pods (e.g. Kubernetes), you can switch Pinchy to manage these via OpenClaw's Gateway RPC API instead.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml up --build
+```
+
+This sets `OPENCLAW_BACKEND=api` so Pinchy communicates with OpenClaw exclusively over its WebSocket connection using the `agents.files.*` and `config.*` RPC methods, rather than writing to the shared filesystem.
+
+The filesystem backend remains the default and is recommended for single-machine Docker Compose deployments.
+
 ## Development mode
 
 For development with hot reload (code changes reflect immediately in the browser), use the dev-mode Docker override:

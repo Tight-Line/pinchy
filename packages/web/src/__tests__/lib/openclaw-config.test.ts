@@ -1,26 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("fs")>();
-  const writeFileSyncMock = vi.fn();
-  const readFileSyncMock = vi.fn();
-  const existsSyncMock = vi.fn().mockReturnValue(true);
-  const mkdirSyncMock = vi.fn();
-  return {
-    ...actual,
-    default: {
-      ...actual,
-      writeFileSync: writeFileSyncMock,
-      readFileSync: readFileSyncMock,
-      existsSync: existsSyncMock,
-      mkdirSync: mkdirSyncMock,
-    },
-    writeFileSync: writeFileSyncMock,
-    readFileSync: readFileSyncMock,
-    existsSync: existsSyncMock,
-    mkdirSync: mkdirSyncMock,
-  };
-});
+const mockBackend = {
+  readConfig: vi.fn().mockResolvedValue({}),
+  writeConfig: vi.fn().mockResolvedValue(undefined),
+  notifyConfigChanged: vi.fn().mockResolvedValue(undefined),
+  ensureAgentWorkspace: vi.fn().mockResolvedValue(undefined),
+  writeAgentFile: vi.fn().mockResolvedValue(undefined),
+  readAgentFile: vi.fn().mockResolvedValue(""),
+  deleteAgentWorkspace: vi.fn().mockResolvedValue(undefined),
+};
+
+vi.mock("@/lib/openclaw-backend", () => ({
+  getBackend: () => mockBackend,
+}));
 
 vi.mock("@/db", () => ({
   db: {
@@ -32,6 +24,7 @@ vi.mock("@/db", () => ({
 
 vi.mock("@/lib/settings", () => ({
   getSetting: vi.fn().mockResolvedValue(null),
+  setSetting: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/server/restart-state", () => ({
@@ -42,119 +35,87 @@ vi.mock("@/lib/migrate-onboarding", () => ({
   migrateExistingSmithers: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
 import { writeOpenClawConfig, regenerateOpenClawConfig } from "@/lib/openclaw-config";
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
 
-const mockedWriteFileSync = vi.mocked(writeFileSync);
-const mockedReadFileSync = vi.mocked(readFileSync);
-const mockedExistsSync = vi.mocked(existsSync);
-const mockedMkdirSync = vi.mocked(mkdirSync);
+const mockedDb = vi.mocked(db);
+const mockedGetSetting = vi.mocked(getSetting);
 
 describe("writeOpenClawConfig", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT: no such file or directory");
-    });
+    mockBackend.readConfig.mockResolvedValue({});
   });
 
-  it("should write config with Anthropic provider", () => {
-    writeOpenClawConfig({
+  it("should write config with Anthropic provider", async () => {
+    await writeOpenClawConfig({
       provider: "anthropic",
       apiKey: "sk-ant-secret",
       model: "anthropic/claude-haiku-4-5-20251001",
     });
 
-    expect(mockedWriteFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("openclaw.json"),
-      expect.stringContaining('"ANTHROPIC_API_KEY": "sk-ant-secret"'),
-      { encoding: "utf-8", mode: 0o644 }
-    );
+    expect(mockBackend.writeConfig).toHaveBeenCalledOnce();
+    const config = mockBackend.writeConfig.mock.calls[0][0];
+    expect(config.env.ANTHROPIC_API_KEY).toBe("sk-ant-secret");
   });
 
-  it("should write config with correct model", () => {
-    writeOpenClawConfig({
+  it("should write config with correct model", async () => {
+    await writeOpenClawConfig({
       provider: "openai",
       apiKey: "sk-key",
       model: "openai/gpt-4o-mini",
     });
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
-
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     expect(config.agents.defaults.model.primary).toBe("openai/gpt-4o-mini");
     expect(config.env.OPENAI_API_KEY).toBe("sk-key");
   });
 
-  it("should include gateway mode local and bind lan", () => {
-    writeOpenClawConfig({
+  it("should include gateway mode local and bind lan", async () => {
+    await writeOpenClawConfig({
       provider: "anthropic",
       apiKey: "sk-ant-key",
       model: "anthropic/claude-haiku-4-5-20251001",
     });
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
-
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     expect(config.gateway.mode).toBe("local");
     expect(config.gateway.bind).toBe("lan");
   });
 
-  it("should create directory if it does not exist", () => {
-    mockedExistsSync.mockReturnValue(false);
-
-    writeOpenClawConfig({
-      provider: "anthropic",
-      apiKey: "sk-ant-key",
-      model: "anthropic/claude-haiku-4-5-20251001",
-    });
-
-    expect(mockedMkdirSync).toHaveBeenCalledWith(expect.any(String), {
-      recursive: true,
-    });
-  });
-
-  it("should write config with Google provider", () => {
-    writeOpenClawConfig({
+  it("should write config with Google provider", async () => {
+    await writeOpenClawConfig({
       provider: "google",
       apiKey: "AIza-key",
       model: "google/gemini-2.0-flash",
     });
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
-
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     expect(config.env.GOOGLE_API_KEY).toBe("AIza-key");
     expect(config.agents.defaults.model.primary).toBe("google/gemini-2.0-flash");
   });
 
-  it("should generate auth token when no existing config", () => {
-    writeOpenClawConfig({
+  it("should generate auth token when no existing config", async () => {
+    await writeOpenClawConfig({
       provider: "anthropic",
       apiKey: "sk-ant-key",
       model: "anthropic/claude-haiku-4-5-20251001",
     });
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
-
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     expect(config.gateway.auth).toBeDefined();
     expect(config.gateway.auth.mode).toBe("token");
     expect(config.gateway.auth.token).toBeTruthy();
     expect(config.gateway.auth.token).toHaveLength(48); // 24 bytes hex
   });
 
-  it("should merge with existing config preserving gateway.auth", () => {
-    const existingConfig = {
+  it("should merge with existing config preserving gateway.auth", async () => {
+    mockBackend.readConfig.mockResolvedValue({
       gateway: {
         mode: "local",
         bind: "lan",
-        auth: {
-          token: "existing-secret-token",
-        },
+        auth: { token: "existing-secret-token" },
       },
       meta: {
         version: "1.2.3",
@@ -165,17 +126,15 @@ describe("writeOpenClawConfig", () => {
           model: { primary: "anthropic/claude-sonnet-4-20250514" },
         },
       },
-    };
-    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+    });
 
-    writeOpenClawConfig({
+    await writeOpenClawConfig({
       provider: "openai",
       apiKey: "sk-new-key",
       model: "openai/gpt-4o",
     });
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     // Pinchy's fields are applied
     expect(config.gateway.mode).toBe("local");
@@ -189,33 +148,26 @@ describe("writeOpenClawConfig", () => {
     expect(config.meta.generatedAt).toBe("2025-01-01T00:00:00Z");
   });
 
-  it("should write config with restrictive file permissions", () => {
-    writeOpenClawConfig({
+  it("should notify config changed after writing", async () => {
+    await writeOpenClawConfig({
       provider: "anthropic",
-      apiKey: "sk-ant-secret",
+      apiKey: "sk-ant-key",
       model: "anthropic/claude-haiku-4-5-20251001",
     });
 
-    expect(mockedWriteFileSync).toHaveBeenCalledWith(expect.any(String), expect.any(String), {
-      encoding: "utf-8",
-      mode: 0o644,
-    });
+    expect(mockBackend.notifyConfigChanged).toHaveBeenCalledOnce();
   });
 
-  it("should create config from scratch when no existing file", () => {
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT: no such file or directory");
-    });
+  it("should create config from scratch when no existing config", async () => {
+    mockBackend.readConfig.mockResolvedValue({});
 
-    writeOpenClawConfig({
+    await writeOpenClawConfig({
       provider: "anthropic",
       apiKey: "sk-ant-fresh",
       model: "anthropic/claude-haiku-4-5-20251001",
     });
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
-
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     expect(config.gateway.mode).toBe("local");
     expect(config.gateway.bind).toBe("lan");
     expect(config.env.ANTHROPIC_API_KEY).toBe("sk-ant-fresh");
@@ -223,29 +175,14 @@ describe("writeOpenClawConfig", () => {
   });
 });
 
-const mockedDb = vi.mocked(db);
-const mockedGetSetting = vi.mocked(getSetting);
-
 describe("regenerateOpenClawConfig", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT: no such file or directory");
-    });
+    mockBackend.readConfig.mockResolvedValue({});
     mockedDb.select.mockReturnValue({
       from: vi.fn().mockResolvedValue([]),
     } as never);
     mockedGetSetting.mockResolvedValue(null);
-  });
-
-  it("should write config with restrictive file permissions", async () => {
-    await regenerateOpenClawConfig();
-
-    expect(mockedWriteFileSync).toHaveBeenCalledWith(expect.any(String), expect.any(String), {
-      encoding: "utf-8",
-      mode: 0o644,
-    });
   });
 
   it("should write agents.list with all agents from DB", async () => {
@@ -271,8 +208,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.agents.list).toHaveLength(2);
     expect(config.agents.list[0]).toEqual({
@@ -292,25 +228,21 @@ describe("regenerateOpenClawConfig", () => {
   });
 
   it("should preserve existing gateway.auth fields", async () => {
-    const existingConfig = {
+    mockBackend.readConfig.mockResolvedValue({
       gateway: {
         mode: "local",
         bind: "lan",
-        auth: {
-          token: "existing-secret-token",
-        },
+        auth: { token: "existing-secret-token" },
       },
       meta: {
         version: "1.2.3",
         generatedAt: "2025-01-01T00:00:00Z",
       },
-    };
-    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+    });
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.gateway.auth.token).toBe("existing-secret-token");
     // Only gateway block is preserved — other top-level fields (meta, etc.) are rebuilt from DB
@@ -329,8 +261,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.env.ANTHROPIC_API_KEY).toBe("sk-ant-decrypted");
     expect(config.env.OPENAI_API_KEY).toBe("sk-openai-decrypted");
@@ -346,8 +277,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.agents.defaults.model.primary).toBe("openai/gpt-4o-mini");
   });
@@ -359,8 +289,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.agents.list).toEqual([]);
   });
@@ -370,8 +299,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.env).toEqual({});
     expect(config.agents.defaults).toEqual({});
@@ -394,8 +322,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     const kbAgent = config.agents.list.find((a: { id: string }) => a.id === "kb-agent-id");
 
     expect(kbAgent.tools).toBeDefined();
@@ -422,8 +349,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     const customAgent = config.agents.list.find((a: { id: string }) => a.id === "custom-agent-id");
 
     expect(customAgent.tools).toBeDefined();
@@ -449,8 +375,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
     const agent = config.agents.list.find((a: { id: string }) => a.id === "power-agent-id");
 
     expect(agent.tools.deny).not.toContain("group:runtime");
@@ -475,8 +400,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.plugins.entries["pinchy-files"]).toBeDefined();
     expect(config.plugins.entries["pinchy-files"].enabled).toBe(true);
@@ -486,7 +410,7 @@ describe("regenerateOpenClawConfig", () => {
   });
 
   it("should not keep stale env vars from previous config", async () => {
-    const existingConfig = {
+    mockBackend.readConfig.mockResolvedValue({
       gateway: {
         mode: "local",
         bind: "lan",
@@ -496,8 +420,7 @@ describe("regenerateOpenClawConfig", () => {
         ANTHROPIC_API_KEY: "old-key",
         OPENAI_API_KEY: "stale-key-should-be-removed",
       },
-    };
-    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+    });
 
     // Only Anthropic is configured now
     mockedGetSetting.mockImplementation(async (key: string) => {
@@ -508,8 +431,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.env.ANTHROPIC_API_KEY).toBe("sk-ant-new");
     expect(config.env.OPENAI_API_KEY).toBeUndefined();
@@ -517,10 +439,12 @@ describe("regenerateOpenClawConfig", () => {
   });
 
   it("should include pinchy-context plugin config for agents with context tools", async () => {
-    const existingConfig = {
+    mockBackend.readConfig.mockResolvedValue({
       gateway: { mode: "local", bind: "lan", auth: { token: "gw-token-123" } },
-    };
-    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+    });
+    mockedGetSetting.mockImplementation(async (key: string) =>
+      key === "gateway_token" ? "gw-token-123" : null
+    );
 
     mockedDb.select.mockReturnValue({
       from: vi.fn().mockResolvedValue([
@@ -539,8 +463,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.plugins.entries["pinchy-context"]).toBeDefined();
     expect(config.plugins.entries["pinchy-context"].enabled).toBe(true);
@@ -553,15 +476,16 @@ describe("regenerateOpenClawConfig", () => {
   });
 
   it("should include pinchy-audit plugin config", async () => {
-    const existingConfig = {
+    mockBackend.readConfig.mockResolvedValue({
       gateway: { mode: "local", bind: "lan", auth: { token: "gw-token-123" } },
-    };
-    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+    });
+    mockedGetSetting.mockImplementation(async (key: string) =>
+      key === "gateway_token" ? "gw-token-123" : null
+    );
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.plugins.entries["pinchy-audit"]).toBeDefined();
     expect(config.plugins.entries["pinchy-audit"].enabled).toBe(true);
@@ -572,10 +496,9 @@ describe("regenerateOpenClawConfig", () => {
   });
 
   it("should include both pinchy-files and pinchy-context when agents use both", async () => {
-    const existingConfig = {
+    mockBackend.readConfig.mockResolvedValue({
       gateway: { mode: "local", bind: "lan", auth: { token: "gw-token" } },
-    };
-    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+    });
 
     mockedDb.select.mockReturnValue({
       from: vi.fn().mockResolvedValue([
@@ -604,18 +527,16 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.plugins.entries["pinchy-files"]).toBeDefined();
     expect(config.plugins.entries["pinchy-context"]).toBeDefined();
   });
 
   it("should include both save tools for admin Smithers", async () => {
-    const existingConfig = {
+    mockBackend.readConfig.mockResolvedValue({
       gateway: { mode: "local", bind: "lan", auth: { token: "gw-token" } },
-    };
-    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+    });
 
     mockedDb.select.mockReturnValue({
       from: vi.fn().mockResolvedValue([
@@ -634,8 +555,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     expect(config.plugins.entries["pinchy-context"].config.agents["admin-smithers"]).toEqual({
       tools: ["save_user_context", "save_org_context"],
@@ -659,8 +579,7 @@ describe("regenerateOpenClawConfig", () => {
 
     await regenerateOpenClawConfig();
 
-    const written = mockedWriteFileSync.mock.calls[0][1] as string;
-    const config = JSON.parse(written);
+    const config = mockBackend.writeConfig.mock.calls[0][0];
 
     // Unused plugins are omitted from entries AND allow list to prevent
     // auto-discovery (restart loop) and "disabled but config present" spam
@@ -677,10 +596,7 @@ describe("regenerateOpenClawConfig", () => {
 describe("restart-state integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT: no such file or directory");
-    });
+    mockBackend.readConfig.mockResolvedValue({});
     mockedDb.select.mockReturnValue({
       from: vi.fn().mockResolvedValue([]),
     } as never);
@@ -690,7 +606,7 @@ describe("restart-state integration", () => {
   it("writeOpenClawConfig calls restartState.notifyRestart", async () => {
     const { restartState } = await import("@/server/restart-state");
 
-    writeOpenClawConfig({
+    await writeOpenClawConfig({
       provider: "anthropic",
       apiKey: "sk-ant-key",
       model: "anthropic/claude-haiku-4-5-20251001",

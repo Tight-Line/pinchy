@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { createSmithersAgent } from "@/lib/personal-agent";
+import { regenerateOpenClawConfig } from "@/lib/openclaw-config";
 
 export async function seedDefaultAgent(ownerId?: string) {
   const existing = await db.query.agents.findFirst();
@@ -10,5 +11,6 @@ export async function seedDefaultAgent(ownerId?: string) {
     ownerId: ownerId ?? null,
     isPersonal: ownerId ? true : false,
     isAdmin: ownerId ? true : false,
+    onAgentCreated: regenerateOpenClawConfig,
   });
 }

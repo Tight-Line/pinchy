@@ -56,6 +56,7 @@ describe("seedDefaultAgent", () => {
       ownerId: null,
       isPersonal: false,
       isAdmin: false,
+      onAgentCreated: expect.any(Function),
     });
   });
 
@@ -80,6 +81,7 @@ describe("seedDefaultAgent", () => {
       ownerId: "user-1",
       isPersonal: true,
       isAdmin: true,
+      onAgentCreated: expect.any(Function),
     });
   });
 

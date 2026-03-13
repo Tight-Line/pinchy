@@ -1,29 +1,18 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
 import { randomBytes } from "crypto";
-import { dirname } from "path";
 import { PROVIDERS, type ProviderName } from "@/lib/providers";
 import { db } from "@/db";
 import { agents } from "@/db/schema";
-import { getSetting } from "@/lib/settings";
+import { getSetting, setSetting } from "@/lib/settings";
 import { computeDeniedGroups } from "@/lib/tool-registry";
 import { getOpenClawWorkspacePath } from "@/lib/workspace";
 import { restartState } from "@/server/restart-state";
 import { migrateExistingSmithers } from "@/lib/migrate-onboarding";
-
-const CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || "/openclaw-config/openclaw.json";
+import { getBackend } from "@/lib/openclaw-backend";
 
 interface OpenClawConfigParams {
   provider: ProviderName;
   apiKey: string;
   model: string;
-}
-
-function readExistingConfig(): Record<string, unknown> {
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
-  } catch {
-    return {};
-  }
 }
 
 function deepMerge(
@@ -51,13 +40,17 @@ function deepMerge(
   return result;
 }
 
-export function writeOpenClawConfig({ provider, apiKey, model }: OpenClawConfigParams) {
-  const existing = readExistingConfig();
+export async function writeOpenClawConfig({ provider, apiKey, model }: OpenClawConfigParams) {
+  const backend = getBackend();
+  const existing = await backend.readConfig();
 
-  // Generate auth token if none exists in the existing config
+  // Generate auth token if none exists. Prefer DB-stored token (reliable
+  // across backends), fall back to reading from config (filesystem mode).
   const existingGateway = (existing.gateway as Record<string, unknown>) || {};
   const existingAuth = (existingGateway.auth as Record<string, unknown>) || {};
-  const token = (existingAuth.token as string) || randomBytes(24).toString("hex");
+  const storedToken = await getSetting("gateway_token");
+  const token = storedToken || (existingAuth.token as string) || randomBytes(24).toString("hex");
+  await setSetting("gateway_token", token, true);
 
   const pinchyFields = {
     gateway: {
@@ -77,25 +70,24 @@ export function writeOpenClawConfig({ provider, apiKey, model }: OpenClawConfigP
 
   const merged = deepMerge(existing, pinchyFields);
 
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), { encoding: "utf-8", mode: 0o644 });
   restartState.notifyRestart();
+  await backend.writeConfig(merged);
+  await backend.notifyConfigChanged();
 }
 
 export async function regenerateOpenClawConfig() {
   // Migrate existing Smithers agents first, so their updated allowedTools
-  // are reflected in the config we're about to generate.
-  await migrateExistingSmithers();
+  // are reflected in the config we're about to generate. The migration
+  // only updates DB rows (allowedTools); workspace file writes happen
+  // after the config is pushed so OpenClaw knows about all agents.
+  await migrateExistingSmithers({ skipFileWrites: true });
 
-  const existing = readExistingConfig();
+  const backend = getBackend();
+  const existing = await backend.readConfig();
 
-  // Preserve only the gateway block from existing config (contains auth token,
-  // mode, bind, and any OpenClaw-generated fields). Everything else is rebuilt
-  // from DB state so deleted providers/agents get cleaned up.
+  // Preserve the gateway block from existing config. In API mode, the
+  // auth token comes back as a redacted sentinel; OpenClaw will un-redact
+  // it when we send the config back via config.set.
   const gateway = (existing.gateway as Record<string, unknown>) || { mode: "local", bind: "lan" };
   // Ensure mode and bind are always set
   gateway.mode = "local";
@@ -183,10 +175,10 @@ export async function regenerateOpenClawConfig() {
     };
   }
 
-  const gatewayAuth = (gateway as Record<string, unknown>).auth as
-    | Record<string, unknown>
-    | undefined;
-  const gatewayToken = (gatewayAuth?.token as string) || "";
+  // Read the gateway token from DB settings (where writeOpenClawConfig
+  // persists it). This avoids relying on config.get which redacts secrets
+  // in API mode.
+  const gatewayToken = (await getSetting("gateway_token")) || "";
 
   // Only include pinchy-context when agents use it. Including disabled plugins
   // with config causes OpenClaw to spam "disabled in config but config is present".
@@ -222,11 +214,15 @@ export async function regenerateOpenClawConfig() {
     config.plugins = { allow: allowedPlugins, entries };
   }
 
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: "utf-8", mode: 0o644 });
+  // Notify before writeConfig so the restart state is set when the
+  // reconnect handler fires (in API mode, writeConfig blocks until
+  // reconnection).
   restartState.notifyRestart();
+
+  await backend.writeConfig(config);
+  await backend.notifyConfigChanged();
+
+  // Now that the config is pushed (and OpenClaw knows about all agents),
+  // write any workspace files that the migration deferred.
+  await migrateExistingSmithers({ skipDbUpdates: true });
 }

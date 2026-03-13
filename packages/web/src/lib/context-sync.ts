@@ -16,7 +16,7 @@ export async function syncUserContextToWorkspaces(userId: string): Promise<void>
   });
 
   for (const agent of personalAgents) {
-    writeWorkspaceFileInternal(agent.id, "USER.md", context);
+    await writeWorkspaceFileInternal(agent.id, "USER.md", context);
   }
 }
 
@@ -28,7 +28,7 @@ export async function syncOrgContextToWorkspaces(): Promise<void> {
   });
 
   for (const agent of sharedAgents) {
-    writeWorkspaceFileInternal(agent.id, "USER.md", context);
+    await writeWorkspaceFileInternal(agent.id, "USER.md", context);
   }
 }
 

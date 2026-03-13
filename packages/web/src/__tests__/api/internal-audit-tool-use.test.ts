@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/gateway-auth", () => ({
-  validateGatewayToken: vi.fn().mockReturnValue(true),
+  validateGatewayToken: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/lib/audit", () => ({
@@ -27,11 +27,11 @@ function makeRequest(body: Record<string, unknown>) {
 describe("POST /api/internal/audit/tool-use", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(validateGatewayToken).mockReturnValue(true);
+    vi.mocked(validateGatewayToken).mockResolvedValue(true);
   });
 
   it("returns 401 when gateway token is invalid", async () => {
-    vi.mocked(validateGatewayToken).mockReturnValue(false);
+    vi.mocked(validateGatewayToken).mockResolvedValue(false);
 
     const res = await POST(
       makeRequest({

@@ -343,7 +343,7 @@ describe("PATCH /api/agents/[agentId]", () => {
     expect(body.error).toBe("Cannot change permissions for personal agents");
   });
 
-  it("does not call regenerateOpenClawConfig directly (updateAgent handles it)", async () => {
+  it("calls regenerateOpenClawConfig after updating agent", async () => {
     vi.mocked(auth.api.getSession).mockResolvedValueOnce({
       user: { id: "admin-1", role: "admin" },
       expires: "",
@@ -372,7 +372,7 @@ describe("PATCH /api/agents/[agentId]", () => {
     });
     expect(response.status).toBe(200);
 
-    expect(regenerateOpenClawConfig).not.toHaveBeenCalled();
+    expect(regenerateOpenClawConfig).toHaveBeenCalled();
   });
 
   it("admin can update pluginConfig for shared agent", async () => {

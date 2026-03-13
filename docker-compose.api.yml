@@ -1,0 +1,17 @@
+# Override: use OpenClaw Gateway API instead of shared filesystem.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.api.yml up --build
+#
+# In this mode Pinchy manages workspaces and config via OpenClaw's RPC API
+# (agents.files.*, config.*) instead of writing directly to the shared
+# filesystem volumes. This is the deployment model for Kubernetes and
+# multi-instance setups where Pinchy and OpenClaw run in separate pods.
+#
+# The shared volumes are still mounted (Compose overrides can't remove them)
+# but Pinchy won't read or write them when OPENCLAW_BACKEND=api.
+
+services:
+  pinchy:
+    environment:
+      - OPENCLAW_BACKEND=api

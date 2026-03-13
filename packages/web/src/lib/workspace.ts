@@ -1,15 +1,9 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from "fs";
-import { join } from "path";
+import { getBackend } from "@/lib/openclaw-backend";
 
 export const ALLOWED_FILES = ["SOUL.md", "AGENTS.md"] as const;
 export type WorkspaceFile = (typeof ALLOWED_FILES)[number];
 
-const DEFAULT_WORKSPACE_BASE_PATH = "/openclaw-config/workspaces";
 const DEFAULT_OPENCLAW_WORKSPACE_PREFIX = "/root/.openclaw/workspaces";
-
-function getWorkspaceBasePath(): string {
-  return process.env.WORKSPACE_BASE_PATH || DEFAULT_WORKSPACE_BASE_PATH;
-}
 
 const PLACEHOLDER_CONTENT: Record<WorkspaceFile, string> = {
   "SOUL.md": `<!-- Describe your agent's personality here. For example:\nYou are a helpful project manager. You are structured, concise,\nand always keep track of deadlines and action items. -->`,
@@ -28,81 +22,53 @@ function assertValidAgentId(agentId: string): void {
   }
 }
 
-export function getWorkspacePath(agentId: string): string {
-  assertValidAgentId(agentId);
-  return join(getWorkspaceBasePath(), agentId);
-}
-
 export function getOpenClawWorkspacePath(agentId: string): string {
   assertValidAgentId(agentId);
   const prefix = process.env.OPENCLAW_WORKSPACE_PREFIX || DEFAULT_OPENCLAW_WORKSPACE_PREFIX;
   return `${prefix}/${agentId}`;
 }
 
-export function ensureWorkspace(agentId: string): void {
+export async function ensureWorkspace(agentId: string): Promise<void> {
   assertValidAgentId(agentId);
-  const workspacePath = getWorkspacePath(agentId);
-
-  mkdirSync(workspacePath, { recursive: true });
+  const backend = getBackend();
+  await backend.ensureAgentWorkspace(agentId);
 
   for (const file of ALLOWED_FILES) {
-    const filePath = join(workspacePath, file);
-    if (!existsSync(filePath)) {
-      writeFileSync(filePath, PLACEHOLDER_CONTENT[file], "utf-8");
+    const existing = await backend.readAgentFile(agentId, file);
+    if (!existing) {
+      await backend.writeAgentFile(agentId, file, PLACEHOLDER_CONTENT[file]);
     }
   }
 }
 
-export function deleteWorkspace(agentId: string): void {
+export async function deleteWorkspace(agentId: string): Promise<void> {
   assertValidAgentId(agentId);
-  const workspacePath = getWorkspacePath(agentId);
-  try {
-    rmSync(workspacePath, { recursive: true, force: true });
-  } catch {
-    // Workspace may not exist, that's fine
-  }
+  await getBackend().deleteAgentWorkspace(agentId);
 }
 
-export function readWorkspaceFile(agentId: string, filename: string): string {
+export async function readWorkspaceFile(agentId: string, filename: string): Promise<string> {
   assertValidAgentId(agentId);
   assertAllowedFile(filename);
-
-  const filePath = join(getWorkspacePath(agentId), filename);
-
-  try {
-    return readFileSync(filePath, "utf-8");
-  } catch {
-    return "";
-  }
+  return getBackend().readAgentFile(agentId, filename);
 }
 
-export function writeWorkspaceFile(agentId: string, filename: string, content: string): void {
-  assertValidAgentId(agentId);
-  assertAllowedFile(filename);
-
-  const workspacePath = getWorkspacePath(agentId);
-
-  if (!existsSync(workspacePath)) {
-    mkdirSync(workspacePath, { recursive: true });
-  }
-
-  writeFileSync(join(workspacePath, filename), content, "utf-8");
-}
-
-export function writeWorkspaceFileInternal(
+export async function writeWorkspaceFile(
   agentId: string,
   filename: string,
   content: string
-): void {
+): Promise<void> {
   assertValidAgentId(agentId);
+  assertAllowedFile(filename);
+  await getBackend().writeAgentFile(agentId, filename, content);
+}
 
-  const workspacePath = getWorkspacePath(agentId);
-
-  if (!existsSync(workspacePath)) {
-    mkdirSync(workspacePath, { recursive: true });
-  }
-
-  writeFileSync(join(workspacePath, filename), content, "utf-8");
+export async function writeWorkspaceFileInternal(
+  agentId: string,
+  filename: string,
+  content: string
+): Promise<void> {
+  assertValidAgentId(agentId);
+  await getBackend().writeAgentFile(agentId, filename, content);
 }
 
 export function generateIdentityContent(agent: { name: string; tagline: string | null }): string {
@@ -111,14 +77,10 @@ export function generateIdentityContent(agent: { name: string; tagline: string |
   return lines.join("\n");
 }
 
-export function writeIdentityFile(
+export async function writeIdentityFile(
   agentId: string,
   agent: { name: string; tagline: string | null }
-): void {
+): Promise<void> {
   assertValidAgentId(agentId);
-  const workspacePath = getWorkspacePath(agentId);
-  if (!existsSync(workspacePath)) {
-    mkdirSync(workspacePath, { recursive: true });
-  }
-  writeFileSync(join(workspacePath, "IDENTITY.md"), generateIdentityContent(agent), "utf-8");
+  await getBackend().writeAgentFile(agentId, "IDENTITY.md", generateIdentityContent(agent));
 }
