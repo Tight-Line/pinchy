@@ -35,8 +35,8 @@ spec:
               # Seed openclaw.json with the gateway token from the Secret.
               # ensure-gateway-token.js will skip generation since token already exists.
               TOKEN=$(cat /secret/gateway-token)
-              mkdir -p /config/.openclaw
-              cat > /config/.openclaw/openclaw.json <<EOJSON
+              mkdir -p /root/.openclaw
+              cat > /root/.openclaw/openclaw.json <<EOJSON
               {
                 "gateway": {
                   "mode": "local",
@@ -53,7 +53,7 @@ spec:
               mountPath: /secret
               readOnly: true
             - name: openclaw-data
-              mountPath: /config
+              mountPath: /root
         - name: copy-plugins
           image: {{ .Values.pinchy.image.repository }}:{{ .Values.pinchy.image.tag | default .Chart.AppVersion }}
           imagePullPolicy: {{ .Values.pinchy.image.pullPolicy }}
@@ -70,15 +70,9 @@ spec:
           ports:
             - name: gateway
               containerPort: 18789
-          env:
-            - name: HOME
-              value: /data
           volumeMounts:
             - name: openclaw-data
-              mountPath: /root/.openclaw
-              subPath: .openclaw
-            - name: openclaw-data
-              mountPath: /data
+              mountPath: /root
             - name: plugins
               mountPath: /root/.openclaw/extensions
               readOnly: true

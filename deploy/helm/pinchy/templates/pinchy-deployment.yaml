@@ -57,6 +57,10 @@ spec:
               value: ws://{{ .Release.Name }}-openclaw:{{ .Values.openclaw.service.port }}
             - name: GATEWAY_TOKEN_PATH
               value: /secrets/gateway-token
+            - name: PINCHY_INTERNAL_URL
+              value: http://{{ .Release.Name }}-pinchy:{{ .Values.pinchy.service.port }}
+            - name: BETTER_AUTH_URL
+              value: {{ if .Values.ingress.enabled }}https://{{ .Values.ingress.host }}{{ else }}http://localhost:{{ .Values.pinchy.service.port }}{{ end }}
             - name: BETTER_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
