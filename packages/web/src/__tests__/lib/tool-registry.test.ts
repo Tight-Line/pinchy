@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   TOOL_REGISTRY,
   getToolById,
@@ -93,31 +93,5 @@ describe("computeDeniedGroups", () => {
     expect(denied).toContain("group:runtime");
     expect(denied).toContain("group:fs");
     expect(denied).toContain("group:web");
-  });
-});
-
-describe("getAllToolDefinitions", () => {
-  it("merges static and MCP tools", async () => {
-    vi.doMock("@/lib/mcp-servers", () => ({
-      getMcpToolDefinitions: vi.fn().mockResolvedValue([
-        {
-          id: "mcp:srv-1:create_issue",
-          label: "create_issue",
-          description: "Create issue",
-          category: "mcp",
-          serverName: "GitHub",
-        },
-      ]),
-    }));
-
-    // Re-import to pick up mock
-    const { getAllToolDefinitions: getAllFresh } = await import("@/lib/tool-registry");
-    const tools = await getAllFresh();
-
-    expect(tools.length).toBe(TOOL_REGISTRY.length + 1);
-    expect(tools.find((t) => t.id === "mcp:srv-1:create_issue")).toBeDefined();
-    expect(tools.find((t) => t.id === "pinchy_ls")).toBeDefined();
-
-    vi.doUnmock("@/lib/mcp-servers");
   });
 });

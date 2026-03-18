@@ -73,12 +73,6 @@ export function getToolsByCategory(category: "safe" | "powerful"): ToolDefinitio
   return TOOL_REGISTRY.filter((t) => t.category === category);
 }
 
-export async function getAllToolDefinitions(): Promise<ToolDefinition[]> {
-  const { getMcpToolDefinitions } = await import("@/lib/mcp-servers");
-  const mcpTools = await getMcpToolDefinitions();
-  return [...TOOL_REGISTRY, ...mcpTools];
-}
-
 /**
  * Given a list of allowed tool IDs, compute which OpenClaw tool groups to deny.
  * Any group that has at least one allowed tool is NOT denied.
