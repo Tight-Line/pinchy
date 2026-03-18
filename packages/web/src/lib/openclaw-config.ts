@@ -1,14 +1,16 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
 import { randomBytes } from "crypto";
-import { dirname } from "path";
+import { dirname, join } from "path";
 import { PROVIDERS, type ProviderName } from "@/lib/providers";
 import { db } from "@/db";
-import { agents } from "@/db/schema";
+import { agents, mcpServers } from "@/db/schema";
 import { getSetting } from "@/lib/settings";
 import { computeDeniedGroups } from "@/lib/tool-registry";
 import { getOpenClawWorkspacePath } from "@/lib/workspace";
 import { restartState } from "@/server/restart-state";
 import { migrateExistingSmithers } from "@/lib/migrate-onboarding";
+import { getServerSlug, buildMcporterServerConfig, decryptEnvVars } from "@/lib/mcp-servers";
+import type { McpToolManifestEntry } from "@/db/schema";
 
 const CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || "/openclaw-config/openclaw.json";
 
@@ -212,6 +214,82 @@ export async function regenerateOpenClawConfig() {
   };
 
   // Note: pinchy-files is only included when agents use it (via pluginConfigs loop above).
+
+  // ── MCP servers: build pinchy-mcp plugin config + mcporter.json ──────
+  const allMcpServers = await db.select().from(mcpServers);
+  const serversWithTools = allMcpServers.filter(
+    (s) => s.toolManifest && (s.toolManifest as McpToolManifestEntry[]).length > 0
+  );
+
+  // Collect per-agent MCP tool grants
+  const mcpAgentConfig: Record<
+    string,
+    { allowedMcpTools: Array<{ serverId: string; serverSlug: string; toolName: string }> }
+  > = {};
+  const referencedServerIds = new Set<string>();
+
+  for (const agent of allAgents) {
+    const allowedTools = (agent.allowedTools as string[]) || [];
+    const mcpTools = allowedTools.filter((t: string) => t.startsWith("mcp:"));
+
+    if (mcpTools.length === 0) continue;
+
+    const agentMcpTools: Array<{ serverId: string; serverSlug: string; toolName: string }> = [];
+
+    for (const toolId of mcpTools) {
+      // Format: mcp:<serverId>:<toolName>
+      const parts = toolId.split(":");
+      if (parts.length < 3) continue;
+      const serverId = parts[1];
+      const toolName = parts.slice(2).join(":");
+
+      const server = serversWithTools.find((s) => s.id === serverId);
+      if (!server) continue;
+
+      referencedServerIds.add(serverId);
+      agentMcpTools.push({
+        serverId,
+        serverSlug: getServerSlug(server.name),
+        toolName,
+      });
+    }
+
+    if (agentMcpTools.length > 0) {
+      mcpAgentConfig[agent.id] = { allowedMcpTools: agentMcpTools };
+    }
+  }
+
+  // Only include pinchy-mcp when at least one agent has MCP tools
+  if (Object.keys(mcpAgentConfig).length > 0) {
+    // Write mcporter.json with only referenced servers
+    const mcporterServers: Record<string, unknown> = {};
+    for (const server of serversWithTools) {
+      if (!referencedServerIds.has(server.id)) continue;
+      const slug = getServerSlug(server.name);
+      const env = decryptEnvVars(server.envVars);
+      mcporterServers[slug] = buildMcporterServerConfig(server, env);
+    }
+
+    const mcporterConfig = { mcpServers: mcporterServers };
+    const configDir = dirname(CONFIG_PATH);
+    const mcporterPath = join(configDir, "mcporter.json");
+
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+    writeFileSync(mcporterPath, JSON.stringify(mcporterConfig, null, 2), {
+      encoding: "utf-8",
+      mode: 0o600,
+    });
+
+    entries["pinchy-mcp"] = {
+      enabled: true,
+      config: {
+        mcporterConfigPath: join("/root/.openclaw", "mcporter.json"),
+        agents: mcpAgentConfig,
+      },
+    };
+  }
 
   // Set plugins.allow to only the enabled plugin IDs. This prevents OpenClaw from
   // auto-discovering unused plugins from the extensions directory, which would cause
