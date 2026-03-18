@@ -175,6 +175,32 @@ export const settings = pgTable("settings", {
   encrypted: boolean("encrypted").default(false),
 });
 
+// ── MCP Servers ─────────────────────────────────────────────────────
+
+export interface McpToolManifestEntry {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export const mcpServers = pgTable("mcp_servers", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull().unique(),
+  transport: text("transport").notNull().default("stdio"), // "stdio" | "http"
+  command: text("command"), // stdio: e.g. "npx"
+  args: jsonb("args").$type<string[]>().notNull().default([]), // stdio: e.g. ["-y", "@modelcontextprotocol/server-github"]
+  url: text("url"), // http: e.g. "https://workspace-mcp.example.com"
+  envVars: text("env_vars"), // Encrypted JSON of env vars (nullable)
+  status: text("status").notNull().default("unknown"), // "connected" | "error" | "unknown"
+  statusMessage: text("status_message"),
+  lastCheckedAt: timestamp("last_checked_at"),
+  toolManifest: jsonb("tool_manifest").$type<McpToolManifestEntry[]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // ── Audit Trail ──────────────────────────────────────────────────────
 
 export const actorTypeEnum = pgEnum("actor_type", ["user", "agent", "system"]);

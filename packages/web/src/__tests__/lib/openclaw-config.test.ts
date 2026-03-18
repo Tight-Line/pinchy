@@ -674,6 +674,112 @@ describe("regenerateOpenClawConfig", () => {
   });
 });
 
+describe("MCP server config generation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT: no such file or directory");
+    });
+    mockedGetSetting.mockResolvedValue(null);
+  });
+
+  it("should include pinchy-mcp when agents have MCP tools", async () => {
+    const existingConfig = {
+      gateway: { mode: "local", bind: "lan", auth: { token: "gw-token" } },
+    };
+    mockedReadFileSync.mockReturnValue(JSON.stringify(existingConfig));
+
+    // First db.select().from(agents), then db.select().from(mcpServers)
+    let selectCallCount = 0;
+    mockedDb.select.mockReturnValue({
+      from: vi.fn().mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          return Promise.resolve([
+            {
+              id: "agent-1",
+              name: "Dev Agent",
+              model: "anthropic/claude-opus-4-6",
+              pluginConfig: null,
+              allowedTools: ["shell", "mcp:srv-1:create_issue"],
+              ownerId: null,
+              isPersonal: false,
+              createdAt: new Date(),
+            },
+          ]);
+        }
+        // MCP servers
+        return Promise.resolve([
+          {
+            id: "srv-1",
+            name: "GitHub MCP",
+            transport: "stdio",
+            command: "npx",
+            args: ["-y", "@mcp/server-github"],
+            url: null,
+            envVars: null,
+            status: "connected",
+            statusMessage: null,
+            lastCheckedAt: null,
+            toolManifest: [{ name: "create_issue", description: "Create issue", inputSchema: {} }],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]);
+      }),
+    } as never);
+
+    await regenerateOpenClawConfig();
+
+    // Find the mcporter.json write (0o600 permissions)
+    const mcporterWrite = mockedWriteFileSync.mock.calls.find((call) =>
+      (call[0] as string).includes("mcporter.json")
+    );
+    expect(mcporterWrite).toBeDefined();
+    expect(mcporterWrite![2]).toEqual(expect.objectContaining({ mode: 0o600 }));
+
+    const mcporterConfig = JSON.parse(mcporterWrite![1] as string);
+    expect(mcporterConfig.mcpServers.github_mcp).toBeDefined();
+    expect(mcporterConfig.mcpServers.github_mcp.command).toBe("npx");
+
+    // Check openclaw.json has pinchy-mcp plugin
+    const openclawWrite = mockedWriteFileSync.mock.calls.find((call) =>
+      (call[0] as string).includes("openclaw.json")
+    );
+    const config = JSON.parse(openclawWrite![1] as string);
+
+    expect(config.plugins.entries["pinchy-mcp"]).toBeDefined();
+    expect(config.plugins.entries["pinchy-mcp"].enabled).toBe(true);
+    expect(config.plugins.entries["pinchy-mcp"].config.agents["agent-1"]).toBeDefined();
+    expect(config.plugins.entries["pinchy-mcp"].config.agents["agent-1"].allowedMcpTools).toEqual([
+      { serverId: "srv-1", serverSlug: "github_mcp", toolName: "create_issue" },
+    ]);
+    expect(config.plugins.allow).toContain("pinchy-mcp");
+  });
+
+  it("should not include pinchy-mcp when no agents have MCP tools", async () => {
+    mockedDb.select.mockReturnValue({
+      from: vi.fn().mockResolvedValue([]),
+    } as never);
+
+    await regenerateOpenClawConfig();
+
+    const openclawWrite = mockedWriteFileSync.mock.calls.find((call) =>
+      (call[0] as string).includes("openclaw.json")
+    );
+    const config = JSON.parse(openclawWrite![1] as string);
+
+    expect(config.plugins?.entries?.["pinchy-mcp"]).toBeUndefined();
+
+    // No mcporter.json should be written
+    const mcporterWrite = mockedWriteFileSync.mock.calls.find((call) =>
+      (call[0] as string).includes("mcporter.json")
+    );
+    expect(mcporterWrite).toBeUndefined();
+  });
+});
+
 describe("restart-state integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();

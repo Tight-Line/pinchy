@@ -1,0 +1,37 @@
+{
+  "id": "pinchy-mcp",
+  "name": "Pinchy MCP",
+  "description": "Bridges MCP server tools into OpenClaw agents via mcporter.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mcporterConfigPath": {
+        "type": "string",
+        "description": "Path to mcporter.json config file"
+      },
+      "agents": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "allowedMcpTools": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "serverId": { "type": "string" },
+                  "serverSlug": { "type": "string" },
+                  "toolName": { "type": "string" }
+                },
+                "required": ["serverId", "serverSlug", "toolName"]
+              }
+            }
+          },
+          "required": ["allowedMcpTools"]
+        }
+      }
+    },
+    "required": ["mcporterConfigPath", "agents"]
+  }
+}

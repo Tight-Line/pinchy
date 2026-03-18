@@ -2,9 +2,10 @@ export interface ToolDefinition {
   id: string;
   label: string;
   description: string;
-  category: "safe" | "powerful";
+  category: "safe" | "powerful" | "mcp";
   group?: string;
   requiresDirectories?: boolean;
+  serverName?: string;
 }
 
 export const TOOL_REGISTRY: readonly ToolDefinition[] = [

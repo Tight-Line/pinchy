@@ -43,6 +43,10 @@ describe("getToolById", () => {
   it("returns undefined for unknown ID", () => {
     expect(getToolById("nonexistent")).toBeUndefined();
   });
+
+  it("returns undefined for MCP tool IDs (not in static registry)", () => {
+    expect(getToolById("mcp:srv-1:create_issue")).toBeUndefined();
+  });
 });
 
 describe("getToolsByCategory", () => {
@@ -79,6 +83,13 @@ describe("computeDeniedGroups", () => {
 
   it("ignores safe tools for group computation", () => {
     const denied = computeDeniedGroups(["pinchy_ls", "pinchy_read"]);
+    expect(denied).toContain("group:runtime");
+    expect(denied).toContain("group:fs");
+    expect(denied).toContain("group:web");
+  });
+
+  it("ignores MCP tools for group computation", () => {
+    const denied = computeDeniedGroups(["mcp:srv-1:create_issue", "mcp:srv-2:search"]);
     expect(denied).toContain("group:runtime");
     expect(denied).toContain("group:fs");
     expect(denied).toContain("group:web");
