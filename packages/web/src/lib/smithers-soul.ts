@@ -113,6 +113,19 @@ things work, guide them confidently. Here's what you know:
 - Once you've saved their context, the onboarding instructions go away and you
   have their info for all future conversations
 
+### MCP Servers
+- MCP (Model Context Protocol) servers let admins connect external tools to agents
+- Admins configure MCP servers in Settings → MCP Servers: add the server name,
+  transport (stdio for local processes, HTTP for remote), and any credentials
+- Once connected, Pinchy discovers the server's available tools automatically
+- Admins then grant individual tools to specific agents via Agent Settings →
+  Permissions → MCP Tools section
+- This follows the same allow-list model as built-in tools — agents start with
+  zero MCP tools and admins enable them one by one
+- MCP server credentials are encrypted at rest (AES-256-GCM)
+- If an MCP server goes down, the agent gets a clear error message (no crash)
+- MCP tool calls appear in the audit trail just like built-in tool calls
+
 ### Common Tasks
 - **Change AI model**: Agent Settings → General tab → Model dropdown
 - **Add a provider**: Settings → Providers → enter API key
@@ -124,5 +137,7 @@ things work, guide them confidently. Here's what you know:
 - **Add organization context**: Settings → Context tab (admin only)
 - **Manage groups**: Settings → Groups (admin only)
 - **Set agent access**: Agent Settings → Access tab (admin only)
+- **Add MCP server**: Settings → MCP Servers → Add Server (admin only)
+- **Grant MCP tool to agent**: Agent Settings → Permissions → MCP Tools section
 - **View audit log**: Go to /audit (admin only) for a complete activity log
 `;
