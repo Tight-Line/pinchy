@@ -2,9 +2,10 @@ export interface ToolDefinition {
   id: string;
   label: string;
   description: string;
-  category: "safe" | "powerful";
+  category: "safe" | "powerful" | "mcp";
   group?: string;
   requiresDirectories?: boolean;
+  serverName?: string;
 }
 
 export const TOOL_REGISTRY: readonly ToolDefinition[] = [
@@ -70,6 +71,12 @@ export function getToolById(id: string): ToolDefinition | undefined {
 
 export function getToolsByCategory(category: "safe" | "powerful"): ToolDefinition[] {
   return TOOL_REGISTRY.filter((t) => t.category === category);
+}
+
+export async function getAllToolDefinitions(): Promise<ToolDefinition[]> {
+  const { getMcpToolDefinitions } = await import("@/lib/mcp-servers");
+  const mcpTools = await getMcpToolDefinitions();
+  return [...TOOL_REGISTRY, ...mcpTools];
 }
 
 /**
