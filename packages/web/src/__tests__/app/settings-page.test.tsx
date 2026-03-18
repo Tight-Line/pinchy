@@ -205,7 +205,8 @@ describe("Settings Page", () => {
 
       render(<SettingsPage />);
 
-      expect(screen.getByText("Loading...")).toBeInTheDocument();
+      // Multiple loading states may exist (provider, MCP servers, etc.) — verify at least one
+      expect(screen.getAllByText("Loading...").length).toBeGreaterThanOrEqual(1);
     });
 
     it("should pass configuredProviders and defaultProvider to ProviderKeyForm after fetch", async () => {

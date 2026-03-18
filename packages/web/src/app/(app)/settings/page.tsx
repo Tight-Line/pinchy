@@ -9,6 +9,7 @@ import { SettingsUsers } from "@/components/settings-users";
 import { SettingsContext } from "@/components/settings-context";
 import { SettingsProfile } from "@/components/settings-profile";
 import { SettingsGroups } from "@/components/settings-groups";
+import { SettingsMcpServers } from "@/components/settings-mcp-servers";
 
 interface ProviderStatus {
   defaultProvider: string | null;
@@ -99,6 +100,7 @@ export default function SettingsPage() {
             )}
             {isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
             {isAdmin && <TabsTrigger value="groups">Groups</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="mcp-servers">MCP Servers</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="context" keepMounted>
@@ -149,6 +151,12 @@ export default function SettingsPage() {
           {isAdmin && (
             <TabsContent value="groups" keepMounted>
               <SettingsGroups />
+            </TabsContent>
+          )}
+
+          {isAdmin && (
+            <TabsContent value="mcp-servers" keepMounted>
+              <SettingsMcpServers />
             </TabsContent>
           )}
         </Tabs>
